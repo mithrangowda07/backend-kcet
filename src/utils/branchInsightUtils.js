@@ -31,6 +31,14 @@ const fetchInsightJson = async (insight) => {
         throw new Error('Insight record not found');
     }
 
+    if (insight.json_data) {
+        try {
+            return normalizeInsightData(insight.json_data);
+        } catch (dbError) {
+            console.warn('Failed to normalize json_data from database, falling back to S3:', dbError.message);
+        }
+    }
+
     if (s3Client && bucketName && insight.s3_key) {
         try {
             const response = await s3Client.send(

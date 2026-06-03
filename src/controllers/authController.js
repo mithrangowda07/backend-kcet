@@ -150,6 +150,7 @@ const registerStudying = async (req, res) => {
             category,
             year_of_starting,
             unique_key,
+            kcet_rank,
         } = req.body;
         const cleanEmail = (email_id || '').trim().toLowerCase();
 
@@ -162,11 +163,12 @@ const registerStudying = async (req, res) => {
             !college_code ||
             !id_card_url ||
             !unique_key ||
-            !year_of_starting
+            !year_of_starting ||
+            !kcet_rank
         ) {
             return res.status(400).json({
                 message:
-                    'Name, email, phone, college, branch, year of starting, USN, ID card, and password are required.',
+                    'Name, email, phone, college, branch, year of starting, USN, ID card, KCET rank, and password are required.',
             });
         }
 
@@ -181,6 +183,11 @@ const registerStudying = async (req, res) => {
 
         if (!category) {
             return res.status(400).json({ message: 'Category is required.', field: 'category' });
+        }
+
+        const rank = Number(kcet_rank);
+        if (!rank || rank <= 0) {
+            return res.status(400).json({ message: 'Valid KCET rank is required.', field: 'kcet_rank' });
         }
 
         const college = await College.findOne({ college_code });
@@ -229,6 +236,7 @@ const registerStudying = async (req, res) => {
             category,
             year_of_starting: startYear,
             unique_key,
+            kcet_rank: rank,
             approval_status: 'PENDING',
             is_verified_student: false,
         });

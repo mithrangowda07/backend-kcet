@@ -65,6 +65,10 @@ app.use(express.urlencoded({ extended: true }));
 // Logger
 app.use(morgan('dev'));
 
+// Static uploads serving
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 // =====================================================
 // HEALTH ROUTES

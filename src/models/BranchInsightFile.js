@@ -9,6 +9,7 @@ const branchInsightFileSchema = new mongoose.Schema({
     original_filename: { type: String, default: '' },
     file_size: { type: Number, default: 0 },
     is_active: { type: Boolean, default: true },
+    json_data: { type: mongoose.Schema.Types.Mixed, default: null },
 }, { timestamps: { createdAt: 'uploaded_at', updatedAt: false } });
 
 // Simulating unique_active_insight_per_branch

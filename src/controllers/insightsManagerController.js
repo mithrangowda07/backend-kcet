@@ -235,7 +235,8 @@ const adminUploadBranchInsight = async (req, res) => {
             original_filename: originalFilename,
             uploaded_by: req.admin?._id,
             file_size: Buffer.byteLength(fileContent, 'utf8'),
-            is_active: true
+            is_active: true,
+            json_data: JSON.parse(fileContent)
         });
 
         await insight.save();

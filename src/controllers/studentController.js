@@ -16,7 +16,9 @@ const me = async (req, res) => {
 // PATCH /api/auth/profile/
 const updateProfile = async (req, res) => {
     try {
-        const allowedUpdates = ['name', 'phone_number', 'category', 'year_of_starting', 'kcet_rank'];
+        const allowedUpdates = req.user.type_of_student === 'studying'
+            ? ['name', 'phone_number', 'category', 'year_of_starting']
+            : ['name', 'phone_number', 'category', 'year_of_starting', 'kcet_rank'];
         const updates = Object.keys(req.body);
         
         updates.forEach(update => {

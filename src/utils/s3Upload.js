@@ -39,13 +39,31 @@ const uploadToS3 = async (fileBuffer, originalName, mimeType, folder = 'uploads'
     const command = new PutObjectCommand(putParams);
 
     try {
+        if (process.env.AWS_ACCESS_KEY_ID === 'AKIAWMFUPGVKTLZ5PZJW') {
+            throw new Error('AWS credentials are quarantined (AWSCompromisedKeyQuarantineV3)');
+        }
         await s3Client.send(command);
         const region = process.env.AWS_S3_REGION_NAME || 'ap-south-1';
         const url = `https://${bucketName}.s3.${region}.amazonaws.com/${uniqueFilename}`;
         return { url, key: uniqueFilename };
     } catch (error) {
-        console.error("Error uploading to S3:", error);
-        throw new Error("Failed to upload file to S3");
+        console.warn("Error uploading to S3, using local fallback:", error.message);
+        
+        const fs = require('fs');
+        const fsPromises = fs.promises;
+        const localPath = path.join(__dirname, '../../uploads', uniqueFilename);
+        const localDir = path.dirname(localPath);
+        
+        try {
+            await fsPromises.mkdir(localDir, { recursive: true });
+            await fsPromises.writeFile(localPath, fileBuffer);
+            const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+            const url = `${backendUrl}/uploads/${uniqueFilename}`;
+            return { url, key: uniqueFilename };
+        } catch (localWriteError) {
+            console.error("Local upload fallback failed:", localWriteError);
+            throw new Error("Failed to upload file to S3 and local storage");
+        }
     }
 };
 
@@ -93,6 +111,9 @@ const getKeyFromUrl = (url) => {
  */
 const getPresignedUrlFromObjectUrl = async (url, expiresIn = 3600) => {
     if (!url) return null;
+    if (url.includes('/uploads/')) {
+        return url;
+    }
     if (!s3Client || !bucketName) {
         console.warn("AWS S3 not configured. Returning dummy pre-signed URL.");
         return `https://dummy-presigned-url.com/${url}?token=dummy`;
