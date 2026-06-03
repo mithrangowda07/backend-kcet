@@ -23,7 +23,8 @@ const allowedOrigins = [
     'http://127.0.0.1:3000',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    'http://10.117.193.26:3000'
+    'http://10.117.193.26:3000',
+    'https://kcet-eduguide.vercel.app/'
 ];
 
 // Add frontend URL from env
