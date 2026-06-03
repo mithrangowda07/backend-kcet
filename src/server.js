@@ -228,14 +228,8 @@ if (!process.env.VERCEL) {
 
         try {
 
-            // MongoDB Connection (support both env var names)
-            const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
-
-            if (!mongoUri) {
-                throw new Error('MONGODB_URI or MONGO_URI is not defined in environment variables');
-            }
-
-            await mongoose.connect(mongoUri);
+            // MongoDB Connection
+            await mongoose.connect(process.env.MONGO_URI);
 
             console.log('MongoDB Connected');
 
