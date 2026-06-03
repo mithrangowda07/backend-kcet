@@ -99,17 +99,17 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
         branchQuery.cluster = cluster;
     }
     
-    const branches = await Branch.find(branchQuery).populate('college').populate('cluster');
+    const branches = await Branch.find(branchQuery).populate('college').populate('cluster').lean();
 
     let validCategories = new Set();
     if (category) {
-        const catObj = await Category.findOne({ _id: category });
+        const catObj = await Category.findOne({ _id: category }).lean();
         if (catObj && catObj.fall_back) {
             catObj.fall_back.split(',').forEach(c => validCategories.add(c.trim()));
         }
         validCategories.add(category);
     } else {
-        const allCats = await Category.find();
+        const allCats = await Category.find().lean();
         allCats.forEach(c => validCategories.add(c._id));
     }
 

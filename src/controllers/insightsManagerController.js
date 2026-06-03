@@ -111,8 +111,12 @@ const adminMe = async (req, res) => {
 // GET /api/insights-manager/colleges/
 const adminCollegeList = async (req, res) => {
     try {
-        const colleges = await College.find().sort({ college_name: 1 });
-        res.json(colleges);
+        const colleges = await College.find().sort({ college_name: 1 }).lean();
+        const formatted = colleges.map(c => ({
+            ...c,
+            college_id: c._id
+        }));
+        res.json(formatted);
     } catch (error) {
         res.status(500).json({ error: "Server error" });
     }
@@ -128,15 +132,30 @@ const adminBranchesByCollege = async (req, res) => {
                 { public_id: collegeParam },
                 { college_code: collegeParam }
             ]
-        });
+        }).lean();
 
         if (!college) return res.status(404).json({ error: 'College not found.' });
 
-        const branches = await Branch.find({ college: college._id }).populate('college').populate('cluster').sort({ branch_name: 1 });
+        const branches = await Branch.find({ college: college._id })
+            .populate('college')
+            .populate('cluster')
+            .sort({ branch_name: 1 })
+            .lean();
+            
         if (branches.length === 0) {
             return res.json([]);
         }
-        res.json(branches);
+        
+        // Emulate virtual fields
+        const formattedBranches = branches.map(b => {
+            const formatted = { ...b, unique_key: b._id };
+            if (formatted.college) {
+                formatted.college.college_id = formatted.college._id;
+            }
+            return formatted;
+        });
+
+        res.json(formattedBranches);
     } catch (error) {
         res.status(500).json({ error: "Server error" });
     }

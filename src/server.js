@@ -3,31 +3,81 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const connectDB = require('./config/db');
+const dbMiddleware = require('./middlewares/dbMiddleware');
+const errorHandler = require('./middlewares/errorHandler');
 
 // Initialize App
 const app = express();
 
-// Connect to Database
-connectDB().catch(err => {
-    console.error('Initial MongoDB connection failed:', err);
-});
-
 // Middlewares
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" } // Safe policy for API resource sharing
+}));
+
+// CORS Dynamic Configuration
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://10.117.193.26:3000'
+];
+
+if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+}
+if (process.env.CORS_ORIGINS) {
+    process.env.CORS_ORIGINS.split(',').map(o => o.trim()).forEach(o => allowedOrigins.push(o));
+}
+
 app.use(cors({
-    origin: [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://10.117.193.26:3000'
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, or Postman)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// 1. Lightweight Health Check (No DB required)
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        environment: process.env.NODE_ENV || 'development',
+        serverless: !!process.env.VERCEL
+    });
+});
+
+// 2. Deep Health Check (DB connectivity check)
+app.get('/api/db-health', async (req, res) => {
+    try {
+        const connectDB = require('./config/db');
+        const db = await connectDB();
+        res.json({
+            status: 'ok',
+            connectionState: db.connection.readyState, // should be 1
+            databaseName: db.connection.name
+        });
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            error: err.name,
+            message: err.message
+        });
+    }
+});
+
+// Apply Database Connection Middleware globally to ensure connectivity for all subsequent API endpoints
+app.use(dbMiddleware);
 
 const authRoutes = require('./routes/auth');
 const studentRoutes = require('./routes/student');
@@ -56,7 +106,7 @@ app.get('/api/locations/', require('./controllers/collegeController').locationsL
 app.get('/api/locations', require('./controllers/collegeController').locationsList);
 
 // Vercel Cron/HTTP Scheduler Endpoint
-app.get('/api/cron/scheduler', async (req, res) => {
+app.get('/api/cron/scheduler', async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -66,11 +116,11 @@ app.get('/api/cron/scheduler', async (req, res) => {
         const result = await runSchedulerJob();
         return res.json({ message: 'Scheduler job executed successfully', ...result });
     } catch (err) {
-        return res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
-// Health check
+// Static URL Map Endpoint
 app.get('/api/', (req, res) => {
     res.json({
         auth: "/api/auth/",
@@ -83,8 +133,13 @@ app.get('/api/', (req, res) => {
         branch_insights: "/api/branch-insights/<branch_id>/",
         admin: "/api/admin/",
         cron_scheduler: "/api/cron/scheduler",
+        health: "/api/health",
+        db_health: "/api/db-health"
     });
 });
+
+// Register Global Error Handling Middleware (must be registered last!)
+app.use(errorHandler);
 
 // Start local scheduler if not running on Vercel
 if (!process.env.VERCEL) {

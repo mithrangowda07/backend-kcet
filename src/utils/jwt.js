@@ -1,7 +1,14 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const SECRET_KEY = process.env.SECRET_KEY || 'django-insecure-change-this-in-production';
+const SECRET_KEY = process.env.JWT_SECRET || process.env.SECRET_KEY || 'django-insecure-change-this-in-production';
+
+if (SECRET_KEY === 'django-insecure-change-this-in-production') {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('FATAL: JWT_SECRET or SECRET_KEY environment variable is not defined in production.');
+    }
+    console.warn('WARNING: JWT_SECRET or SECRET_KEY is not defined. Using insecure default fallback for development.');
+}
 
 /**
  * Generates an access token and refresh token compatible with Django's SimpleJWT.

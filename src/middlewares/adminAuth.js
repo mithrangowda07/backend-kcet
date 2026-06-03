@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const AdminAccount = require('../models/AdminAccount');
-require('dotenv').config();
+const { SECRET_KEY } = require('../utils/jwt');
 
 const adminAuthMiddleware = async (req, res, next) => {
     try {
@@ -12,8 +12,8 @@ const adminAuthMiddleware = async (req, res, next) => {
         const token = authHeader.split(' ')[1];
         
         try {
-            // Using same secret as Django to verify tokens if they exist, or Node's own
-            const decoded = jwt.verify(token, process.env.SECRET_KEY || 'django-insecure-change-this-in-production');
+            // Use unified verified secret key
+            const decoded = jwt.verify(token, SECRET_KEY);
             
             const admin = await AdminAccount.findById(decoded.admin_id || decoded.id);
             if (!admin || !admin.is_active) {
