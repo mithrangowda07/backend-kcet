@@ -78,6 +78,7 @@ const formatAdminStudentDetail = async (student) => {
 
 // POST /api/insights-manager/login/
 const adminLogin = async (req, res) => {
+    console.log(req.body);
     try {
         const email = (req.body.email || '').trim().toLowerCase();
         const password = req.body.password;
