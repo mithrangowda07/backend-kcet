@@ -228,11 +228,22 @@ const search = async (req, res) => {
 
         let collegeMatch = {};
         if (query) {
-            collegeMatch.$or = [
-                { college_name: { $regex: query, $options: 'i' } },
-                { college_code: { $regex: query, $options: 'i' } },
-                { location: { $regex: query, $options: 'i' } }
-            ];
+            const words = query.split(/\s+/).filter(Boolean);
+            if (words.length > 0) {
+                const wordQueries = words.map(word => {
+                    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const flexiblePattern = [...escapedWord].join('[.\\s-]*');
+                    const flexibleRegex = new RegExp(flexiblePattern, 'i');
+                    return {
+                        $or: [
+                            { college_name: { $regex: flexibleRegex } },
+                            { college_code: { $regex: new RegExp(escapedWord, 'i') } },
+                            { location: { $regex: new RegExp(escapedWord, 'i') } }
+                        ]
+                    };
+                });
+                collegeMatch.$and = wordQueries;
+            }
         }
         if (location) {
             collegeMatch.location = { $regex: `^${location}$`, $options: 'i' };
@@ -244,46 +255,12 @@ const search = async (req, res) => {
             college_id: c._id
         }));
 
-        let branchCollegesMatch = {};
-        if (query) {
-            branchCollegesMatch.$or = [
-                { college_name: { $regex: query, $options: 'i' } },
-                { college_code: { $regex: query, $options: 'i' } },
-                { location: { $regex: query, $options: 'i' } }
-            ];
-        }
-        if (location) {
-            branchCollegesMatch.location = { $regex: `^${location}$`, $options: 'i' };
-        }
-
-        const matchedCollegesForBranch = await College.find(branchCollegesMatch).lean();
-        const matchedCollegeIds = matchedCollegesForBranch.map(c => c._id);
-
-        let branchMatch = {};
-        if (query) {
-            branchMatch.$or = [
-                { branch_name: { $regex: query, $options: 'i' } },
-                { college: { $in: matchedCollegeIds } }
-            ];
-        } else if (location) {
-            branchMatch.college = { $in: matchedCollegeIds };
-        }
-
-        const branches = await Branch.find(branchMatch).populate('college').populate('cluster').lean();
-        const formattedBranches = branches.map(b => {
-            const formatted = { ...b, unique_key: b._id };
-            if (formatted.college) {
-                formatted.college.college_id = formatted.college._id;
-            }
-            return formatted;
-        });
-
         const uniqueLocations = await College.distinct('location');
         const sortedLocations = uniqueLocations.filter(loc => loc).sort();
 
         res.json({
             colleges: formattedColleges,
-            branches: formattedBranches,
+            branches: [], // Frontend doesn't use branches on search, skip querying 1800+ records for speed
             locations: sortedLocations
         });
     } catch (error) {

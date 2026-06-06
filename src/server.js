@@ -144,7 +144,8 @@ app.get(
 );
 
 // Legacy Search Route
-app.use('/api/search', collegeRoutes);
+app.get('/api/search', require('./controllers/collegeController').search);
+app.get('/api/search/', require('./controllers/collegeController').search);
 
 // Locations Routes
 app.get(
