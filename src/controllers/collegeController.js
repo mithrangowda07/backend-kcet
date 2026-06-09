@@ -294,7 +294,11 @@ const categoryList = async (req, res) => {
 const clusterList = async (req, res) => {
     try {
         const clusters = await Cluster.find().sort({ _id: 1 }).lean();
-        res.json(clusters);
+        const formattedClusters = clusters.map(c => ({
+            ...c,
+            cluster_code: c._id
+        }));
+        res.json(formattedClusters);
     } catch (error) {
         res.status(500).json({ error: "Server error" });
     }

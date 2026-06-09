@@ -1,5 +1,6 @@
 const Branch = require('../models/Branch');
 const Category = require('../models/Category');
+const Cluster = require('../models/Cluster');
 
 const getRoundFallbackOrder = (selectedRound) => {
     const round = selectedRound.toUpperCase();
@@ -94,12 +95,64 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
     const fallbackOrder = getRoundFallbackOrder(roundUpper);
     const years = ['2022', '2023', '2024', '2025'];
 
+    console.log(`[RECOMMENDATIONS] Incoming cluster value: "${cluster}"`);
+
     let branchQuery = {};
     if (cluster) {
-        branchQuery.cluster = cluster;
+        const normalizedCluster = typeof cluster === 'string'
+            ? cluster.trim().toLowerCase().replace(/[_-]/g, ' ')
+            : '';
+
+        if (normalizedCluster && normalizedCluster !== 'all') {
+            // Map common abbreviations
+            const abbreviations = {
+                'cs': '1', 'cse': '1', 'computer science': '1',
+                'ec': '2', 'ece': '2', 'electronics': '2',
+                'me': '3', 'mech': '3', 'mechanical': '3',
+                'cv': '4', 'civil': '4',
+                'other': '5'
+            };
+
+            let matchedClusterId = abbreviations[normalizedCluster];
+
+            if (!matchedClusterId) {
+                // If not in abbreviations, look up from all clusters in DB
+                const clusters = await Cluster.find().lean();
+                let matchedCluster = clusters.find(c =>
+                    c._id.toLowerCase() === normalizedCluster ||
+                    c.cluster_name.toLowerCase().replace(/[_-]/g, ' ') === normalizedCluster ||
+                    c.cluster_name.toLowerCase().replace(/\s+cluster$/i, '').replace(/[_-]/g, ' ') === normalizedCluster
+                );
+
+                if (!matchedCluster) {
+                    matchedCluster = clusters.find(c =>
+                        c.cluster_name.toLowerCase().includes(normalizedCluster) ||
+                        normalizedCluster.includes(c.cluster_name.toLowerCase()) ||
+                        normalizedCluster.includes(c.cluster_name.toLowerCase().replace(/\s+cluster$/i, ''))
+                    );
+                }
+
+                if (matchedCluster) {
+                    matchedClusterId = matchedCluster._id;
+                }
+            }
+
+            if (matchedClusterId) {
+                branchQuery.cluster = matchedClusterId;
+            } else {
+                // Fallback to original value if no matches found
+                branchQuery.cluster = cluster;
+            }
+        }
     }
+
+    console.log(`[RECOMMENDATIONS] Generated MongoDB query:`, JSON.stringify(branchQuery));
     
     const branches = await Branch.find(branchQuery).populate('college').populate('cluster').lean();
+
+    console.log(`[RECOMMENDATIONS] Filtered branch list (${branches.length} branches):`, 
+        branches.map(b => `${b._id} (${b.branch_name})`).join(', ')
+    );
 
     let validCategories = new Set();
     if (category) {
@@ -174,6 +227,7 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
 
     const recommendations = Object.values(recommendationsDict);
     recommendations.sort((a, b) => a.cutoff - b.cutoff);
+    console.log(`[RECOMMENDATIONS] Final recommendation count: ${recommendations.length}`);
     return recommendations;
 };
 
