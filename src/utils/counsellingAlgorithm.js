@@ -186,7 +186,7 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
             }
         }
 
-        if (bestCutoff !== null && bestCutoff >= openingRank && bestCutoff <= closingRank) {
+        if (bestCutoff !== null && bestCutoff >= openingRank) {
             const key = `${branch.college._id}_${branch.branch_id}`;
             const distanceFromRank = Math.abs(bestCutoff - kcetRank);
             const eligibilityFlag = bestCutoff <= kcetRank;
@@ -218,10 +218,31 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
         }
     }
 
-    const recommendations = Object.values(recommendationsDict);
-    recommendations.sort((a, b) => a.cutoff - b.cutoff);
-    console.log(`[RECOMMENDATIONS] Final recommendation count: ${recommendations.length}`);
-    return recommendations;
+    const allCandidates = Object.values(recommendationsDict);
+    allCandidates.sort((a, b) => a.cutoff - b.cutoff);
+
+    // Initial filtering based on current closing rank
+    const initialMatches = allCandidates.filter(r => r.cutoff <= closingRank);
+
+    let finalRecs;
+    let finalClosingRank = closingRank;
+
+    if (initialMatches.length >= 20) {
+        finalRecs = initialMatches;
+    } else {
+        // If matches are fewer than 20, increase the closing rank to fetch up to 20 recommendations
+        finalRecs = allCandidates.slice(0, 20);
+        if (finalRecs.length > 0) {
+            const lastCutoff = finalRecs[finalRecs.length - 1].cutoff;
+            finalClosingRank = Math.max(closingRank, lastCutoff);
+        }
+    }
+
+    console.log(`[RECOMMENDATIONS] Final recommendation count: ${finalRecs.length}, final closing rank: ${finalClosingRank}`);
+    return {
+        recommendations: finalRecs,
+        closingRank: finalClosingRank
+    };
 };
 
 module.exports = {

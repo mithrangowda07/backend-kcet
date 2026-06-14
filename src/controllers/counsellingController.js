@@ -57,9 +57,17 @@ const recommendations = async (req, res) => {
 
         const [calcOpening, calcClosing] = calculateRankWindow(kcet_rank);
         const response_opening = opening_rank !== null && !isNaN(opening_rank) ? opening_rank : calcOpening;
-        const response_closing = closing_rank !== null && !isNaN(closing_rank) ? closing_rank : calcClosing;
+        const requested_closing = closing_rank !== null && !isNaN(closing_rank) ? closing_rank : calcClosing;
 
-        const recommendationsList = await getRecommendations(kcet_rank, category, year, round_name, cluster, opening_rank, closing_rank);
+        const { recommendations: recommendationsList, closingRank: finalClosing } = await getRecommendations(
+            kcet_rank,
+            category,
+            year,
+            round_name,
+            cluster,
+            response_opening,
+            requested_closing
+        );
 
         res.json({
             kcet_rank,
@@ -68,7 +76,7 @@ const recommendations = async (req, res) => {
             round: round_name,
             cluster,
             opening_rank: response_opening,
-            closing_rank: response_closing,
+            closing_rank: finalClosing,
             recommendations: recommendationsList,
             count: recommendationsList.length
         });
