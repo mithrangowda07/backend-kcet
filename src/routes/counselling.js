@@ -13,5 +13,7 @@ router.post('/choices/create/', counsellingController.choicesCreate);
 router.patch('/choices/:choice_id/update/', counsellingController.choicesUpdate);
 router.delete('/choices/:choice_id/delete/', counsellingController.choicesDelete);
 router.post('/choices/bulk-update/', counsellingController.choicesBulkUpdate);
+router.post('/choices/bulk-add/', counsellingController.choicesBulkAdd);
+router.post('/choices/bulk-delete/', counsellingController.choicesBulkDelete);
 
 module.exports = router;

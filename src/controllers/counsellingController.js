@@ -1,6 +1,7 @@
 const CounsellingChoice = require('../models/CounsellingChoice');
 const Branch = require('../models/Branch');
 const Category = require('../models/Category');
+const College = require('../models/College');
 const { getRecommendations, calculateRankWindow } = require('../utils/counsellingAlgorithm');
 
 // Helper function to replicate _get_cutoff_rank
@@ -312,11 +313,137 @@ const choicesBulkUpdate = async (req, res) => {
     }
 };
 
+// POST /api/counselling/choices/bulk-add/
+const choicesBulkAdd = async (req, res) => {
+    try {
+        const student = req.user;
+        if (student.type_of_student !== 'counselling') {
+            return res.status(403).json({ error: 'Only counselling students can create choices' });
+        }
+
+        let choicesInput = req.body.choices || [];
+        if (!Array.isArray(choicesInput)) {
+            return res.status(400).json({ error: 'choices array is required' });
+        }
+
+        // Get existing choices to check for duplicates
+        const existingChoices = await CounsellingChoice.find({ student_user_id: student._id });
+        const existingUniqueKeys = new Set(
+            existingChoices
+                .map(c => c.unique_key ? c.unique_key.toString() : null)
+                .filter(Boolean)
+        );
+
+        // Resolve branches in bulk
+        const collegeCodes = [...new Set(choicesInput.map(c => c.collegeCode).filter(Boolean))];
+        const branchCodes = [...new Set(choicesInput.map(c => c.branchCode).filter(Boolean))];
+
+        const colleges = await College.find({ college_code: { $in: collegeCodes } });
+        const collegeMap = new Map(colleges.map(c => [c.college_code, c._id]));
+
+        const collegeIds = Array.from(collegeMap.values());
+        const branches = await Branch.find({ college: { $in: collegeIds }, branch_id: { $in: branchCodes } });
+        
+        // Map of collegeId_branch_id -> Branch._id
+        const branchMap = new Map();
+        for (const b of branches) {
+            branchMap.set(`${b.college}_${b.branch_id}`, b._id);
+        }
+
+        let addedCount = 0;
+        let skippedCount = 0;
+        let failedCount = 0;
+
+        const newChoicesDocs = [];
+        
+        // Calculate safe starting order index to prevent collisions
+        let nextOrder = 1;
+        if (existingChoices.length > 0) {
+            const orders = existingChoices.map(c => c.order_of_list || 0);
+            nextOrder = Math.max(...orders) + 1;
+        }
+
+        const processedKeysInBatch = new Set();
+
+        for (const item of choicesInput) {
+            const collegeId = collegeMap.get(item.collegeCode);
+            if (!collegeId) {
+                failedCount++;
+                continue;
+            }
+
+            const uniqueKey = branchMap.get(`${collegeId}_${item.branchCode}`);
+            if (!uniqueKey) {
+                failedCount++;
+                continue;
+            }
+
+            // Check if already in choices (DB or current batch)
+            if (existingUniqueKeys.has(uniqueKey) || processedKeysInBatch.has(uniqueKey)) {
+                skippedCount++;
+                continue;
+            }
+
+            processedKeysInBatch.add(uniqueKey);
+            newChoicesDocs.push({
+                student_user_id: student._id,
+                unique_key: uniqueKey,
+                order_of_list: nextOrder++
+            });
+            addedCount++;
+        }
+
+        if (newChoicesDocs.length > 0) {
+            await CounsellingChoice.insertMany(newChoicesDocs);
+        }
+
+        res.json({
+            success: true,
+            added: addedCount,
+            skipped: skippedCount,
+            failed: failedCount
+        });
+    } catch (error) {
+        console.error("Bulk add error:", error);
+        res.status(500).json({ error: "Server error during bulk add" });
+    }
+};
+
+// POST /api/counselling/choices/bulk-delete/
+const choicesBulkDelete = async (req, res) => {
+    try {
+        const student = req.user;
+        if (student.type_of_student !== 'counselling') {
+            return res.status(403).json({ error: 'Only counselling students can delete choices' });
+        }
+
+        let { choiceIds } = req.body;
+        if (!Array.isArray(choiceIds) || choiceIds.length === 0) {
+            return res.status(400).json({ error: 'choiceIds array is required' });
+        }
+
+        const result = await CounsellingChoice.deleteMany({
+            _id: { $in: choiceIds },
+            student_user_id: student._id
+        });
+
+        res.json({
+            success: true,
+            deleted: result.deletedCount
+        });
+    } catch (error) {
+        console.error("Bulk delete error:", error);
+        res.status(500).json({ error: "Server error during bulk delete" });
+    }
+};
+
 module.exports = {
     recommendations,
     choicesList,
     choicesCreate,
     choicesUpdate,
     choicesDelete,
-    choicesBulkUpdate
+    choicesBulkUpdate,
+    choicesBulkAdd,
+    choicesBulkDelete
 };
