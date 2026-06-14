@@ -45,7 +45,7 @@ const recommendations = async (req, res) => {
         kcet_rank = parseInt(kcet_rank, 10);
         if (isNaN(kcet_rank)) return res.status(400).json({ error: 'kcet_rank must be a valid integer' });
 
-        const category = req.body.category || student.category;
+        const category = req.body.category || student.category || 'GM';
         const year = req.body.year || '2025';
         let round_name = (req.body.round || 'R1').toUpperCase();
         if (!['R1', 'R2', 'R3'].includes(round_name)) round_name = 'R1';

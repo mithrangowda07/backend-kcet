@@ -154,17 +154,13 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
         branches.map(b => `${b._id} (${b.branch_name})`).join(', ')
     );
 
+    const targetCategory = category || 'GM';
     let validCategories = new Set();
-    if (category) {
-        const catObj = await Category.findOne({ _id: category }).lean();
-        if (catObj && catObj.fall_back) {
-            catObj.fall_back.split(',').forEach(c => validCategories.add(c.trim()));
-        }
-        validCategories.add(category);
-    } else {
-        const allCats = await Category.find().lean();
-        allCats.forEach(c => validCategories.add(c._id));
+    const catObj = await Category.findOne({ _id: targetCategory }).lean();
+    if (catObj && catObj.fall_back) {
+        catObj.fall_back.split(',').forEach(c => validCategories.add(c.trim()));
     }
+    validCategories.add(targetCategory);
 
     const recommendationsDict = {};
 
@@ -184,16 +180,13 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
                     if (stabilized !== null) finalCutoff = stabilized;
                 }
 
-                if (finalCutoff >= openingRank && finalCutoff <= closingRank) {
-                    if (bestCutoff === null || finalCutoff < bestCutoff) {
-                        bestCutoff = finalCutoff;
-                        bestCategory = cat;
-                    }
-                }
+                bestCutoff = finalCutoff;
+                bestCategory = cat;
+                break; // Found the most specific category's cutoff. Use it and stop falling back.
             }
         }
 
-        if (bestCutoff !== null) {
+        if (bestCutoff !== null && bestCutoff >= openingRank && bestCutoff <= closingRank) {
             const key = `${branch.college._id}_${branch.branch_id}`;
             const distanceFromRank = Math.abs(bestCutoff - kcetRank);
             const eligibilityFlag = bestCutoff <= kcetRank;
