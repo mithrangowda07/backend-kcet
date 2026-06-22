@@ -95,16 +95,13 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
     const fallbackOrder = getRoundFallbackOrder(roundUpper);
     const years = ['2022', '2023', '2024', '2025'];
 
-    console.log(`[RECOMMENDATIONS] Incoming cluster value: "${cluster}"`);
+    console.log(`[RECOMMENDATIONS] Incoming cluster value:`, cluster);
 
     let branchQuery = {};
     if (cluster) {
-        const normalizedCluster = typeof cluster === 'string'
-            ? cluster.trim().toLowerCase().replace(/[_-]/g, ' ')
-            : '';
-
-        if (normalizedCluster && normalizedCluster !== 'all') {
-            // Map common abbreviations
+        const clusterArray = Array.isArray(cluster) ? cluster : [cluster];
+        const hasAll = clusterArray.some(c => typeof c === 'string' && c.trim().toLowerCase() === 'all');
+        if (!hasAll && clusterArray.length > 0) {
             const abbreviations = {
                 'cs': '1', 'cse': '1', 'computer science': '1',
                 'ec': '2', 'ece': '2', 'electronics': '2',
@@ -113,35 +110,46 @@ const getRecommendations = async (kcetRank, category = null, year = '2025', roun
                 'other': '5'
             };
 
-            let matchedClusterId = abbreviations[normalizedCluster];
+            const dbClusters = await Cluster.find().lean();
+            const matchedClusterIds = [];
 
-            if (!matchedClusterId) {
-                // If not in abbreviations, look up from all clusters in DB
-                const clusters = await Cluster.find().lean();
-                let matchedCluster = clusters.find(c =>
-                    c._id.toLowerCase() === normalizedCluster ||
-                    c.cluster_name.toLowerCase().replace(/[_-]/g, ' ') === normalizedCluster ||
-                    c.cluster_name.toLowerCase().replace(/\s+cluster$/i, '').replace(/[_-]/g, ' ') === normalizedCluster
-                );
+            for (const c of clusterArray) {
+                if (typeof c !== 'string') continue;
+                const normalizedCluster = c.trim().toLowerCase().replace(/[_-]/g, ' ');
+                if (!normalizedCluster) continue;
 
-                if (!matchedCluster) {
-                    matchedCluster = clusters.find(c =>
-                        c.cluster_name.toLowerCase().includes(normalizedCluster) ||
-                        normalizedCluster.includes(c.cluster_name.toLowerCase()) ||
-                        normalizedCluster.includes(c.cluster_name.toLowerCase().replace(/\s+cluster$/i, ''))
+                let matchedClusterId = abbreviations[normalizedCluster];
+
+                if (!matchedClusterId) {
+                    let matchedCluster = dbClusters.find(dc =>
+                        dc._id.toLowerCase() === normalizedCluster ||
+                        dc.cluster_name.toLowerCase().replace(/[_-]/g, ' ') === normalizedCluster ||
+                        dc.cluster_name.toLowerCase().replace(/\s+cluster$/i, '').replace(/[_-]/g, ' ') === normalizedCluster
                     );
+
+                    if (!matchedCluster) {
+                        matchedCluster = dbClusters.find(dc =>
+                            dc.cluster_name.toLowerCase().includes(normalizedCluster) ||
+                            normalizedCluster.includes(dc.cluster_name.toLowerCase()) ||
+                            normalizedCluster.includes(dc.cluster_name.toLowerCase().replace(/\s+cluster$/i, ''))
+                        );
+                    }
+
+                    if (matchedCluster) {
+                        matchedClusterId = matchedCluster._id;
+                    }
                 }
 
-                if (matchedCluster) {
-                    matchedClusterId = matchedCluster._id;
+                if (matchedClusterId) {
+                    matchedClusterIds.push(matchedClusterId);
+                } else {
+                    // Fallback to original value if no matches found
+                    matchedClusterIds.push(c);
                 }
             }
 
-            if (matchedClusterId) {
-                branchQuery.cluster = matchedClusterId;
-            } else {
-                // Fallback to original value if no matches found
-                branchQuery.cluster = cluster;
+            if (matchedClusterIds.length > 0) {
+                branchQuery.cluster = { $in: matchedClusterIds };
             }
         }
     }
