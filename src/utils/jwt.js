@@ -43,8 +43,24 @@ const generateAdminTokens = (adminId, email) => {
     return { access };
 };
 
+const generateTempToken = (email, purpose) => {
+    return jwt.sign({ email, purpose, token_type: 'temp' }, SECRET_KEY, { expiresIn: '15m' });
+};
+
+const verifyTempToken = (token, purpose) => {
+    try {
+        const decoded = jwt.verify(token, SECRET_KEY);
+        if (decoded.token_type !== 'temp' || decoded.purpose !== purpose) return null;
+        return decoded.email;
+    } catch {
+        return null;
+    }
+};
+
 module.exports = {
     generateTokens,
     generateAdminTokens,
+    generateTempToken,
+    verifyTempToken,
     SECRET_KEY
 };
