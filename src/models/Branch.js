@@ -1,6 +1,40 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
+const computeRecommendationIndex = (cutoffs) => {
+    if (!cutoffs || !Array.isArray(cutoffs)) return undefined;
+    const recommendation_index = {};
+    
+    const rounds = ['r1', 'r2', 'r3'];
+    const years = ['2022', '2023', '2024', '2025'];
+    
+    for (const cutoff of cutoffs) {
+        const category = cutoff.category;
+        if (!category) continue;
+        
+        const values = [];
+        for (const year of years) {
+            for (const round of rounds) {
+                const val = cutoff[`cutoff_${year}_${round}`];
+                if (val !== null && val !== undefined && val !== '') {
+                    const parsed = parseInt(val, 10);
+                    if (!isNaN(parsed) && parsed !== 0) {
+                        values.push(parsed);
+                    }
+                }
+            }
+        }
+        
+        if (values.length > 0) {
+            const min_rank = Math.min(...values);
+            const max_rank = Math.max(...values);
+            recommendation_index[category] = { min_rank, max_rank };
+        }
+    }
+    
+    return Object.keys(recommendation_index).length > 0 ? recommendation_index : undefined;
+};
+
 const cutoffSchema = new mongoose.Schema({
     category: { type: String, required: true },
     cutoff_2022_r1: { type: String, default: null },
@@ -24,7 +58,12 @@ const branchSchema = new mongoose.Schema({
     cluster: { type: String, ref: 'Cluster', required: true },
     branch_id: { type: String, required: true },
     branch_name: { type: String, required: true },
-    cutoffs: [cutoffSchema] // Embedded array for Cutoffs
+    college_name: { type: String, default: null },
+    college_code: { type: String, default: null },
+    location: { type: String, default: null },
+    cluster_name: { type: String, default: null },
+    cutoffs: [cutoffSchema], // Embedded array for Cutoffs
+    recommendation_index: { type: mongoose.Schema.Types.Mixed, default: undefined }
 }, {
     toJSON: {
         virtuals: true,
@@ -45,12 +84,46 @@ const branchSchema = new mongoose.Schema({
 
 branchSchema.add({ _id: String });
 
-branchSchema.pre('save', function (next) {
+branchSchema.index({ cluster: 1 });
+branchSchema.index({ location: 1 });
+branchSchema.index({ cluster: 1, location: 1 });
+branchSchema.index({ college: 1 });
+
+branchSchema.pre('save', async function () {
     if (this.isNew || !this._id) {
         // Reproduces `before_branch_insert` trigger behavior
         this._id = `${this.college}${this.cluster}${this.branch_id}`;
     }
-    next();
+
+    // Generate recommendation_index automatically
+    try {
+        this.recommendation_index = computeRecommendationIndex(this.cutoffs);
+    } catch (err) {
+        console.error('Error computing recommendation_index in pre-save hook:', err);
+    }
+
+    // Denormalize college name/code/location and cluster name
+    try {
+        const College = mongoose.model('College');
+        const Cluster = mongoose.model('Cluster');
+
+        const collegeDoc = await College.findById(this.college).lean();
+        if (collegeDoc) {
+            this.college_name = collegeDoc.college_name;
+            this.college_code = collegeDoc.college_code;
+            this.location = collegeDoc.location;
+        }
+
+        const clusterDoc = await Cluster.findById(this.cluster).lean();
+        if (clusterDoc) {
+            this.cluster_name = clusterDoc.cluster_name;
+        }
+    } catch (err) {
+        console.error('Error denormalizing branch details in pre-save hook:', err);
+    }
 });
 
-module.exports = mongoose.model('Branch', branchSchema);
+const BranchModel = mongoose.model('Branch', branchSchema);
+BranchModel.computeRecommendationIndex = computeRecommendationIndex;
+
+module.exports = BranchModel;

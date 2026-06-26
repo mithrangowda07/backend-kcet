@@ -137,6 +137,40 @@ function getClusterId(branchName, branchCode) {
     return '5';
 }
 
+const computeRecommendationIndex = (cutoffs) => {
+    if (!cutoffs || !Array.isArray(cutoffs)) return undefined;
+    const recommendation_index = {};
+    
+    const rounds = ['r1', 'r2', 'r3'];
+    const years = ['2022', '2023', '2024', '2025'];
+    
+    for (const cutoff of cutoffs) {
+        const category = cutoff.category;
+        if (!category) continue;
+        
+        const values = [];
+        for (const year of years) {
+            for (const round of rounds) {
+                const val = cutoff[`cutoff_${year}_${round}`];
+                if (val !== null && val !== undefined && val !== '') {
+                    const parsed = parseInt(val, 10);
+                    if (!isNaN(parsed) && parsed !== 0) {
+                        values.push(parsed);
+                    }
+                }
+            }
+        }
+        
+        if (values.length > 0) {
+            const min_rank = Math.min(...values);
+            const max_rank = Math.max(...values);
+            recommendation_index[category] = { min_rank, max_rank };
+        }
+    }
+    
+    return Object.keys(recommendation_index).length > 0 ? recommendation_index : undefined;
+};
+
 function run() {
     console.log('📖 Reading raw data files...');
     const rawBranches = JSON.parse(fs.readFileSync(path.join(dataDir, 'branches.json'), 'utf8'));
@@ -264,6 +298,7 @@ function run() {
         });
 
         const cutoffsArray = Array.from(categoryMap.values());
+        const recommendationIndex = computeRecommendationIndex(cutoffsArray);
 
         const uniqueKey = `${collegeId}${clusterId}${branchId}`;
 
@@ -275,6 +310,7 @@ function run() {
             branch_id: branchId,
             branch_name: branchName,
             cutoffs: cutoffsArray,
+            recommendation_index: recommendationIndex,
             __v: 0
         });
     });

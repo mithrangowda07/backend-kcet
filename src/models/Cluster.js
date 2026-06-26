@@ -20,4 +20,18 @@ const clusterSchema = new mongoose.Schema({
     }
 });
 
+clusterSchema.post('save', async function (doc) {
+    try {
+        const Branch = mongoose.model('Branch');
+        await Branch.updateMany(
+            { cluster: doc._id },
+            {
+                cluster_name: doc.cluster_name,
+            }
+        );
+    } catch (err) {
+        console.error('Error updating branches after cluster save:', err);
+    }
+});
+
 module.exports = mongoose.model('Cluster', clusterSchema);

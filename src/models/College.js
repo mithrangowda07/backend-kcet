@@ -25,4 +25,20 @@ const collegeSchema = new mongoose.Schema({
     }
 });
 
+collegeSchema.post('save', async function (doc) {
+    try {
+        const Branch = mongoose.model('Branch');
+        await Branch.updateMany(
+            { college: doc._id },
+            {
+                college_name: doc.college_name,
+                college_code: doc.college_code,
+                location: doc.location,
+            }
+        );
+    } catch (err) {
+        console.error('Error updating branches after college save:', err);
+    }
+});
+
 module.exports = mongoose.model('College', collegeSchema);

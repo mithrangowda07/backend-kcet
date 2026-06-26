@@ -51,7 +51,8 @@ const recommendations = async (req, res) => {
         let round_name = (req.body.round || 'R1').toUpperCase();
         if (!['R1', 'R2', 'R3'].includes(round_name)) round_name = 'R1';
         
-        const cluster = req.body.cluster || null;
+        const clusters = req.body.clusters || req.body.cluster || null;
+        const locations = req.body.locations || null;
         let opening_rank = req.body.opening_rank !== undefined ? parseInt(req.body.opening_rank, 10) : null;
         let closing_rank = req.body.closing_rank !== undefined ? parseInt(req.body.closing_rank, 10) : null;
 
@@ -64,9 +65,10 @@ const recommendations = async (req, res) => {
             category,
             year,
             round_name,
-            cluster,
+            clusters,
             response_opening,
-            requested_closing
+            requested_closing,
+            locations
         );
 
         res.json({
@@ -74,7 +76,8 @@ const recommendations = async (req, res) => {
             category,
             year,
             round: round_name,
-            cluster,
+            clusters,
+            locations,
             opening_rank: response_opening,
             closing_rank: finalClosing,
             recommendations: recommendationsList,

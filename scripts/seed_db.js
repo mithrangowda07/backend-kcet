@@ -69,7 +69,36 @@ const seedDb = async () => {
 
         // 5. Seed Branches (contains embedded cutoffs)
         console.log(`➕ Seeding ${branches.length} branches...`);
-        const seededBranches = await Branch.insertMany(branches);
+        console.log('   Denormalizing fields for seeding...');
+        const collegeDocs = await College.find({}).lean();
+        const collegeMap = new Map(collegeDocs.map(c => [c._id, c]));
+        const clusterDocs = await Cluster.find({}).lean();
+        const clusterMap = new Map(clusterDocs.map(c => [c._id, c]));
+
+
+        const enrichedBranches = branches.map(branch => {
+            // 1. Denormalize fields
+            const colDoc = collegeMap.get(branch.college);
+            if (colDoc) {
+                branch.college_name = colDoc.college_name;
+                branch.college_code = colDoc.college_code;
+                branch.location = colDoc.location;
+            }
+
+            const clDoc = clusterMap.get(branch.cluster);
+            if (clDoc) {
+                branch.cluster_name = clDoc.cluster_name;
+            }
+
+            // 2. Compute recommendation index
+            if (Branch.computeRecommendationIndex) {
+                branch.recommendation_index = Branch.computeRecommendationIndex(branch.cutoffs);
+            }
+
+            return branch;
+        });
+
+        const seededBranches = await Branch.insertMany(enrichedBranches);
         console.log(`✅ Seeded ${seededBranches.length} branches`);
 
         // 6. Extract and seed locations from colleges
