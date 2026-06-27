@@ -3,6 +3,7 @@ const Branch = require('../models/Branch');
 const Category = require('../models/Category');
 const College = require('../models/College');
 const { getRecommendations, calculateRankWindow } = require('../utils/counsellingAlgorithm');
+const { validateKcetRank } = require('../utils/validation');
 
 // Helper function to replicate _get_cutoff_rank
 const getCutoffRank = async (studentCategory, branch, year = '2025', roundName = 'r1') => {
@@ -44,7 +45,8 @@ const recommendations = async (req, res) => {
             return res.status(400).json({ error: 'kcet_rank is required' });
         }
         kcet_rank = parseInt(kcet_rank, 10);
-        if (isNaN(kcet_rank)) return res.status(400).json({ error: 'kcet_rank must be a valid integer' });
+        const rankError = validateKcetRank(kcet_rank);
+        if (rankError) return res.status(400).json({ error: rankError });
 
         const category = req.body.category || student.category || 'GM';
         const year = req.body.year || '2025';

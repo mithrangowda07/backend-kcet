@@ -2,7 +2,7 @@ const Student = require('../models/Student');
 const Branch = require('../models/Branch');
 const College = require('../models/College');
 const { verifyPassword, hashPassword } = require('../utils/hash');
-const { validatePassword } = require('../utils/validation');
+const { validatePassword, validateKcetRank } = require('../utils/validation');
 const jwt = require('jsonwebtoken');
 const { generateTokens, generateTempToken, verifyTempToken, SECRET_KEY } = require('../utils/jwt');
 const OTP = require('../models/OTP');
@@ -101,10 +101,11 @@ const registerCounselling = async (req, res) => {
             return res.status(400).json({ message: passwordError, field: 'password' });
         }
 
-        const rank = Number(kcet_rank);
-        if (!rank || rank <= 0) {
-            return res.status(400).json({ message: 'Valid KCET rank is required.', field: 'kcet_rank' });
+        const rankError = validateKcetRank(kcet_rank);
+        if (rankError) {
+            return res.status(400).json({ message: rankError, field: 'kcet_rank' });
         }
+        const rank = Number(kcet_rank);
 
         if (!category) {
             return res.status(400).json({ message: 'Category is required.', field: 'category' });
@@ -209,10 +210,11 @@ const registerStudying = async (req, res) => {
             return res.status(400).json({ message: 'Category is required.', field: 'category' });
         }
 
-        const rank = Number(kcet_rank);
-        if (!rank || rank <= 0) {
-            return res.status(400).json({ message: 'Valid KCET rank is required.', field: 'kcet_rank' });
+        const rankError = validateKcetRank(kcet_rank);
+        if (rankError) {
+            return res.status(400).json({ message: rankError, field: 'kcet_rank' });
         }
+        const rank = Number(kcet_rank);
 
         const college = await College.findOne({ college_code });
         if (!college) {

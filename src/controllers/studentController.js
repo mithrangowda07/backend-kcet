@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const { uploadToS3Url } = require('../utils/s3Upload');
+const { validateKcetRank } = require('../utils/validation');
 
 // GET /api/auth/me/
 const me = async (req, res) => {
@@ -21,6 +22,13 @@ const updateProfile = async (req, res) => {
             : ['name', 'phone_number', 'category', 'year_of_starting', 'kcet_rank'];
         const updates = Object.keys(req.body);
         
+        if (req.user.type_of_student === 'counselling' && req.body.kcet_rank !== undefined) {
+            const rankError = validateKcetRank(req.body.kcet_rank);
+            if (rankError) {
+                return res.status(400).json({ error: rankError, field: 'kcet_rank' });
+            }
+        }
+
         updates.forEach(update => {
             if (allowedUpdates.includes(update)) {
                 req.user[update] = req.body[update];
