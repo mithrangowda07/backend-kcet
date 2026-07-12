@@ -145,7 +145,7 @@ const sendOtpRegistrationEmail = async (recipient, otp) => {
 <p>Welcome to <strong>KCET EduMate</strong>!</p>
 <p>To complete your registration and verify your email address, please use the One-Time Password (OTP) below:</p>
 <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e40af;">${otp}</p>
-<p>This OTP is valid for 5 minutes.</p>
+<p>This OTP is valid for 3 minutes.</p>
 <p>For your security:<br/>
 • Do not share this OTP with anyone.<br/>
 • KCET EduMate will never ask for your OTP via phone, email, or message.</p>
@@ -169,7 +169,7 @@ const sendOtpForgotPasswordEmail = async (recipient, otp) => {
 <p>We received a request to reset the password for your <strong>KCET EduMate</strong> account.</p>
 <p>Please use the following One-Time Password (OTP) to proceed:</p>
 <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e40af;">${otp}</p>
-<p>This OTP is valid for 5 minutes.</p>
+<p>This OTP is valid for 3 minutes.</p>
 <p>If you did not request a password reset, please ignore this email. Your account will remain secure.</p>
 <p>For security reasons, do not share this OTP with anyone.</p>
 <p>Best regards,<br/>KCET EduGuide Team</p>
@@ -191,7 +191,7 @@ const sendOtpChangePasswordEmail = async (recipient, otp) => {
 <p>A request has been made to change the password for your <strong>KCET EduMate</strong> account.</p>
 <p>Please use the following One-Time Password (OTP) to confirm this action:</p>
 <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e40af;">${otp}</p>
-<p>This OTP is valid for 5 minutes.</p>
+<p>This OTP is valid for 3 minutes.</p>
 <p>If you did not request this password change, please immediately secure your account and contact support.</p>
 <p>For your security, never share this OTP with anyone.</p>
 <p>Best regards,<br/>KCET EduGuide Team</p>

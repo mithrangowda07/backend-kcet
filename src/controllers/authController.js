@@ -5,13 +5,13 @@ const { verifyPassword, hashPassword } = require('../utils/hash');
 const { validatePassword, validateKcetRank } = require('../utils/validation');
 const jwt = require('jsonwebtoken');
 const { generateTokens, generateTempToken, verifyTempToken, SECRET_KEY } = require('../utils/jwt');
-const OTP = require('../models/OTP');
+const otpService = require('../services/otp.service');
+const redisClient = require('../config/redisClient');
 const {
     sendOtpRegistrationEmail,
     sendOtpForgotPasswordEmail,
     sendOtpChangePasswordEmail
 } = require('../utils/emailService');
-const bcrypt = require('bcryptjs');
 
 // POST /api/auth/login/
 const login = async (req, res) => {
@@ -360,29 +360,26 @@ const sendOtp = async (req, res) => {
             }
         }
 
-        // Enforce 60-second cooldown rate limit between requests
-        const lastOtp = await OTP.findOne({ email: cleanEmail, purpose }).sort({ createdAt: -1 });
-        if (lastOtp && (Date.now() - lastOtp.createdAt.getTime()) < 60000) {
-            const waitTime = Math.ceil((60000 - (Date.now() - lastOtp.createdAt.getTime())) / 1000);
-            return res.status(429).json({ error: `Please wait ${waitTime} seconds before requesting another OTP.`, cooldown: waitTime });
+        // Enforce 60-second cooldown rate limit between requests using Redis
+        if (!redisClient.isOpen) {
+            return res.status(500).json({ error: 'Redis service is currently unavailable. Please try again later.' });
         }
 
-        // Delete existing OTPs for this email and purpose to ensure only one is active
-        await OTP.deleteMany({ email: cleanEmail, purpose });
+        const cooldownKey = `cooldown:${cleanEmail}`;
+        const cooldownExists = await redisClient.get(cooldownKey);
+        if (cooldownExists) {
+            const ttl = await redisClient.ttl(cooldownKey);
+            return res.status(429).json({ error: `Please wait ${ttl} seconds before requesting another OTP.`, cooldown: ttl });
+        }
 
         // Generate 6-digit numeric OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpHash = bcrypt.hashSync(otp, 10);
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes validity
+        const otp = otpService.generateOtp();
 
-        const otpDoc = new OTP({
-            email: cleanEmail,
-            otpHash,
-            purpose,
-            attempts: 0,
-            expiresAt
-        });
-        await otpDoc.save();
+        // Store OTP in Redis
+        await otpService.storeOtp(cleanEmail, otp);
+
+        // Set cooldown key in Redis for 60 seconds
+        await redisClient.set(cooldownKey, 'active', { EX: 60 });
 
         // Send email based on purpose
         if (purpose === 'registration') {
@@ -396,7 +393,7 @@ const sendOtp = async (req, res) => {
         res.json({ message: 'OTP sent successfully.' });
     } catch (error) {
         console.error('Send OTP error:', error);
-        res.status(500).json({ error: 'Error sending OTP' });
+        res.status(500).json({ error: error.message || 'Error sending OTP' });
     }
 };
 
@@ -409,36 +406,24 @@ const verifyOtp = async (req, res) => {
         }
 
         const cleanEmail = email.trim().toLowerCase();
-        const otpDoc = await OTP.findOne({ email: cleanEmail, purpose });
 
-        if (!otpDoc) {
+        if (!redisClient.isOpen) {
+            return res.status(500).json({ error: 'Redis service is currently unavailable. Please try again later.' });
+        }
+
+        const isValid = await otpService.verifyOtp(cleanEmail, otp);
+
+        if (!isValid) {
             return res.status(400).json({ error: 'OTP has expired or is invalid.' });
         }
 
-        if (otpDoc.attempts >= 5) {
-            await OTP.deleteOne({ _id: otpDoc._id });
-            return res.status(400).json({ error: 'Maximum OTP verification attempts exceeded. Please request a new OTP.' });
-        }
-
-        const isMatch = bcrypt.compareSync(otp, otpDoc.otpHash);
-        if (!isMatch) {
-            otpDoc.attempts += 1;
-            if (otpDoc.attempts >= 5) {
-                await OTP.deleteOne({ _id: otpDoc._id });
-                return res.status(400).json({ error: 'Maximum OTP verification attempts exceeded. Please request a new OTP.' });
-            }
-            await otpDoc.save();
-            return res.status(400).json({ error: `Invalid OTP. ${5 - otpDoc.attempts} attempts remaining.` });
-        }
-
-        // OTP matches - invalidate (delete) OTP and issue a short-lived temp token
-        await OTP.deleteOne({ _id: otpDoc._id });
+        // OTP matches - generate temporary token
         const tempToken = generateTempToken(cleanEmail, purpose);
 
         res.json({ message: 'OTP verified successfully.', tempToken });
     } catch (error) {
         console.error('Verify OTP error:', error);
-        res.status(500).json({ error: 'Error verifying OTP' });
+        res.status(500).json({ error: error.message || 'Error verifying OTP' });
     }
 };
 
